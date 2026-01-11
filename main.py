@@ -1,19 +1,22 @@
-import discord
-from discord.ext import commands
+import telebot
 import os
 
-# Configuración de comandos y emojis
-intents = discord.Intents.default()
-bot = commands.Bot(command_prefix="!", intents=intents)
+# Conexión con el Token de Telegram
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+bot = telebot.TeleBot(TOKEN)
 
-@bot.command()
-async def descargar(ctx, url):
-    await ctx.send(f"⚡ **Iniciando descarga...**")
-    # Aquí el bot detectará si es Mediafire, Pixeldrain, etc.
-    # Mostrará: ⏬ Progreso | 🚀 Velocidad: 10MB/s | ⏱️ Tiempo
-    await ctx.send(f"✅ Descarga completada. ¿Deseas extraer el archivo?")
+@bot.message_handler(commands=['start'])
+def send_welcome(message):
+    bot.reply_to(message, "🐺 **Lobo Nivel 73 Activo**\n✅ Límite de descarga: **2 GB**\n⚡ Velocidad: Máxima")
 
-@bot.command()
-async def extraer(ctx, nombre_archivo, password=None):
-    await ctx.send(f"🔓 Extrayendo {nombre_archivo}... (Soporta ZIP, RAR, 7Z)")
-    # Función para usar la contraseña local si el archivo la tiene
+@bot.message_handler(commands=['descargar'])
+def descargar(message):
+    bot.reply_to(message, "⚡ **Iniciando descarga de alta velocidad (Límite 2GB)...**")
+    # Simulación de progreso y velocidad que pediste
+    bot.send_message(message.chat.id, "⏬ **Progreso:** [||||||||--] 85%\n🚀 **Velocidad:** 45 MB/s")
+    bot.send_message(message.chat.id, "✅ **Archivo listo.** | Tamaño detectado: < 2GB")
+    
+    # Recordatorio de tus reglas de juego del 10 de enero
+    bot.send_message(message.chat.id, "🔮 *Cazando en el Cuarto Mapa...*\nRecuerda: Necesitas 10 orbes para deseo Épico y 60 para Legendario.")
+
+bot.polling()
