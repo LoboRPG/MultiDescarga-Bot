@@ -1,5 +1,5 @@
-discord.py
-yt-dlp
+pyTelegramBotAPI
 requests
+yt-dlp
 py7zr
 rarfile
