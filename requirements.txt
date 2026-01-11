@@ -1,5 +1,3 @@
 pyTelegramBotAPI
 requests
 yt-dlp
-py7zr
-rarfile
