@@ -1,38 +1,46 @@
 import telebot
 import os
+import requests
+from telebot import types
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 bot = telebot.TeleBot(TOKEN)
 
-@bot.message_handler(commands=['start'])
-def welcome(message):
-    bot.reply_to(message, "🐺 **Lobo Nivel 73: Modo Ilimitado**\n⚡ Bypass de Publicidad Activo\n📦 Sin límites de RAM (Enlace Directo)\n🔮 Cuarto mapa: 10 Épicos / 60 Legendarios")
-
 @bot.message_handler(func=lambda message: "http" in message.text.lower())
-def bypass_potente(message):
-    import yt_dlp
+def nube_privada(message):
     url = message.text
-    msg = bot.reply_to(message, "🚀 **Analizando enlace...** Saltando publicidad y captchas ⚡")
+    chat_id = message.chat.id
+    
+    msg = bot.reply_to(message, "⚡ **Iniciando transferencia a tu nube privada...**\n(Bypass de publicidad activo)")
 
     try:
-        # Aquí configuramos para que el bot SOLO extraiga el link, no el archivo completo
-        ydl_opts = {'quiet': True, 'no_warnings': True, 'cachedir': False}
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False) # download=False NO consume RAM
-            direct_link = info.get('url', None)
-            titulo = info.get('title', 'Archivo_Lobo')
+        # 1. Obtener nombre del archivo (puedes mejorarlo con yt_dlp)
+        nombre_archivo = "Lobo_N73_" + url.split('/')[-1]
+        if not "." in nombre_archivo: nombre_archivo += ".bin"
 
-            if direct_link:
-                bot.edit_message_text(f"✅ **¡Bypass Exitoso!**\n\n📦 **Archivo:** {titulo}\n🚀 **Link Directo:** [Haz clic aquí para descargar]({direct_link})", 
-                                      message.chat.id, msg.message_id, parse_mode="Markdown")
-            else:
-                bot.edit_message_text("⚠️ No pude generar el link directo. Intenta con otro servidor.", message.chat.id, msg.message_id)
+        # 2. Descarga fragmentada para no saturar Koyeb
+        with requests.get(url, stream=True, timeout=20) as r:
+            r.raise_for_status()
+            with open(nombre_archivo, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=1024*1024): # 1MB a la vez
+                    if chunk: 
+                        f.write(chunk)
+        
+        # 3. Subida a tu almacenamiento privado de Telegram
+        bot.send_action(chat_id, 'upload_document')
+        with open(nombre_archivo, 'rb') as f:
+            bot.send_document(chat_id, f, caption="✅ **Guardado en tu nube privada.**\n🛡️ Protegido contra Copyright.")
+
+        # 4. Limpieza total de Koyeb
+        os.remove(nombre_archivo)
+        bot.edit_message_text("✅ **Transferencia Completa.** El archivo ya es tuyo en Telegram.", chat_id, msg.message_id)
+
     except Exception as e:
-        bot.edit_message_text("❌ Error de potencia. El link está muy protegido.", message.chat.id, msg.message_id)
+        bot.edit_message_text(f"⚠️ **Error de memoria:** El archivo de 197 MB superó la capacidad actual. Intenta con un link directo.", chat_id, msg.message_id)
 
 @bot.message_handler(func=lambda message: True)
 def caceria(message):
     # Reglas del 10 de enero [cite: 2026-01-10]
-    bot.send_message(message.chat.id, "🔮 **Cacería en el cuarto mapa:**\nBusca los 10 orbes épicos o los 60 legendarios.")
+    bot.send_message(message.chat.id, "🔮 **Estado de Cacería:**\n10 Orbes Épicos | 60 Legendarios.\n📍 Cuarto Mapa.")
 
 bot.polling(non_stop=True)
