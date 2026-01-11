@@ -1,52 +1,38 @@
 import telebot
 import os
-import requests
-from telebot import types
 
-# Usamos el Token que ya configuraste
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 bot = telebot.TeleBot(TOKEN)
 
 @bot.message_handler(commands=['start'])
 def welcome(message):
-    bot.reply_to(message, "🐺 **Lobo Nivel 73: Sistema Optimizado**\n✅ Bypass Publicidad | MP4 | ZIP\n🚀 Servidores: Pixeldrain, Gofile, Fireload, Mp4upload\n🔮 *Cacería activa en el cuarto mapa.*")
+    bot.reply_to(message, "🐺 **Lobo Nivel 73: Modo Ilimitado**\n⚡ Bypass de Publicidad Activo\n📦 Sin límites de RAM (Enlace Directo)\n🔮 Cuarto mapa: 10 Épicos / 60 Legendarios")
 
 @bot.message_handler(func=lambda message: "http" in message.text.lower())
-def procesar_todo(message):
+def bypass_potente(message):
+    import yt_dlp
     url = message.text
-    chat_id = message.chat.id
-    
-    # IMPORTANTE: Cargamos yt_dlp aquí adentro para ahorrar RAM al inicio
-    import yt_dlp 
-    
-    msg = bot.reply_to(message, "🚀 **Analizando enlace...** Saltando publicidad ⚡")
+    msg = bot.reply_to(message, "🚀 **Analizando enlace...** Saltando publicidad y captchas ⚡")
 
     try:
-        ydl_opts = {
-            'outtmpl': '%(title)s.%(ext)s',
-            'format': 'best',
-            'quiet': True,
-            'no_warnings': True,
-            'cachedir': False
-        }
-
+        # Aquí configuramos para que el bot SOLO extraiga el link, no el archivo completo
+        ydl_opts = {'quiet': True, 'no_warnings': True, 'cachedir': False}
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            bot.edit_message_text("📡 **Extrayendo (Rayo 45 MB/s)...**", chat_id, msg.message_id)
-            info = ydl.extract_info(url, download=True)
-            filename = ydl.prepare_filename(info)
+            info = ydl.extract_info(url, download=False) # download=False NO consume RAM
+            direct_link = info.get('url', None)
+            titulo = info.get('title', 'Archivo_Lobo')
 
-            bot.edit_message_text(f"📦 **Subiendo archivo...**", chat_id, msg.message_id)
-            with open(filename, 'rb') as f:
-                bot.send_document(chat_id, f, caption="✅ **¡Misión cumplida!**")
-            
-            os.remove(filename)
-
+            if direct_link:
+                bot.edit_message_text(f"✅ **¡Bypass Exitoso!**\n\n📦 **Archivo:** {titulo}\n🚀 **Link Directo:** [Haz clic aquí para descargar]({direct_link})", 
+                                      message.chat.id, msg.message_id, parse_mode="Markdown")
+            else:
+                bot.edit_message_text("⚠️ No pude generar el link directo. Intenta con otro servidor.", message.chat.id, msg.message_id)
     except Exception as e:
-        bot.edit_message_text("⚠️ **Error:** Memoria llena o link inválido. Intenta con un archivo más pequeño.", chat_id, msg.message_id)
+        bot.edit_message_text("❌ Error de potencia. El link está muy protegido.", message.chat.id, msg.message_id)
 
 @bot.message_handler(func=lambda message: True)
-def caceria_orbes(message):
-    # Reglas del 10 de enero: 10 orbes (Épico) / 60 orbes (Legendario)
-    bot.send_message(message.chat.id, "🔮 *Cazando en el cuarto mapa...* \nProbabilidad equilibrada para el Lobo Nivel 73.")
+def caceria(message):
+    # Reglas del 10 de enero [cite: 2026-01-10]
+    bot.send_message(message.chat.id, "🔮 **Cacería en el cuarto mapa:**\nBusca los 10 orbes épicos o los 60 legendarios.")
 
 bot.polling(non_stop=True)
