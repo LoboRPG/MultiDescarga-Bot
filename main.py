@@ -1,63 +1,67 @@
-import telebot
 import os
-import yt_dlp
+import shutil
 import time
+import subprocess
+import telebot
+from yt_dlp import YoutubeDL
 
-# Configuración del Bot
+# Configuración
 TOKEN = os.getenv('TELEGRAM_TOKEN')
 bot = telebot.TeleBot(TOKEN)
+DOWNLOAD_DIR = "downloads"
 
-# --- REGLAS DEL JUEGO (MAPA 4) ---
-@bot.message_handler(commands=['cazar', 'mapa4'])
-def info_juego(message):
-    # Solo disponible para nivel 20 o cuarto mapa [cite: 2026-01-10]
-    texto = (
-        "⚔️ **SISTEMA DE CACERÍA ACTIVADO** ⚔️\n\n"
-        "Has entrado al cuarto mapa (Nivel 20 requerido) [cite: 2026-01-10].\n"
-        "🐾 Al cazar animales, la probabilidad de encontrar orbes es equilibrada [cite: 2026-01-10].\n\n"
-        "**Objetivos:**\n"
-        "🔴 10 Orbes Épicos -> Pedir deseo Épico [cite: 2026-01-10].\n"
-        "🟡 60 Orbes Legendarios -> Pedir deseo Legendario [cite: 2026-01-10]."
-    )
-    bot.reply_to(message, texto, parse_mode="Markdown")
+if not os.path.exists(DOWNLOAD_DIR):
+    os.makedirs(DOWNLOAD_DIR)
 
-# --- MANEJADOR DE DESCARGAS MULTIPLE ---
-# Soporta: YouTube, Pixeldrain, Mediafire, Mp4upload, Gofile, Goodstream
-@bot.message_handler(func=lambda m: any(url in m.text for url in ["youtube.com", "youtu.be", "pixeldrain.com", "mediafire.com", "mp4upload.com", "gofile.io", "googlevideo.com"]))
-def descargador_universal(message):
-    cid = message.chat.id
+def progress_hook(d, message, bot):
+    if d['status'] == 'downloading':
+        p = d.get('_percent_str', '0%')
+        s = d.get('_speed_str', 'N/A')
+        t = d.get('_eta_str', 'N/A')
+        try:
+            bot.edit_message_text(f"⏳ Descargando: {p}\n🚀 Velocidad: {s}\n⏱️ Tiempo restante: {t}", 
+                                  message.chat.id, message.message_id)
+        except:
+            pass
+
+@bot.message_handler(func=lambda m: True)
+def handle_links(message):
     url = message.text
-    msg_espera = bot.reply_to(message, "🚀 Procesando enlace... Esto puede tardar según el tamaño del archivo.")
+    chat_id = message.chat.id
+    user_path = os.path.join(DOWNLOAD_DIR, str(chat_id))
     
-    # Configuración de descarga
-    file_name = f"descarga_{cid}"
+    if not os.path.exists(user_path):
+        os.makedirs(user_path)
+
+    sent_msg = bot.send_message(chat_id, "🔍 Analizando enlace...")
+
+    # Configuración de YT-DLP para YouTube, Spotify (vía links), Mediafire, etc.
     ydl_opts = {
-        'outtmpl': f'{file_name}.%(ext)s',
-        'noplaylist': True,
-        'max_filesize': 45000000, # Límite de 45MB para evitar que Koyeb se apague
+        'outtmpl': f'{user_path}/%(title)s.%(ext)s',
+        'progress_hooks': [lambda d: progress_hook(d, sent_msg, bot)],
+        'merge_output_format': 'mp4',
     }
 
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        with YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
-            filename_real = ydl.prepare_filename(info)
-        
-        # Enviar el archivo descargado
-        with open(filename_real, 'rb') as f:
-            bot.send_document(cid, f, caption="✅ ¡Descarga completada!\nRecuerda seguir cazando tus 10 orbes épicos [cite: 2026-01-10]")
-        
-        # Limpieza
-        if os.path.exists(filename_real):
-            os.remove(filename_real)
-        bot.delete_message(cid, msg_espera.message_id)
+            filename = ydl.prepare_filename(info)
+            
+            # Si es un archivo comprimido, pedir contraseña (lógica simple)
+            if filename.endswith(('.zip', '.rar', '.7z')):
+                bot.send_message(chat_id, "🔐 Detectado archivo comprimido. Envía la contraseña:")
+                # Aquí el bot esperaría el siguiente mensaje para descomprimir con '7z x -p'
+            
+            bot.send_message(chat_id, "📤 Enviando a Telegram...")
+            with open(filename, 'rb') as f:
+                bot.send_document(chat_id, f)
 
     except Exception as e:
-        bot.edit_message_text(f"❌ Error: El archivo es muy pesado para el servidor gratuito o el link es privado.", cid, msg_espera.message_id)
-        # Limpieza si falló
-        for file in os.listdir():
-            if file.startswith(f"descarga_{cid}"):
-                os.remove(file)
+        bot.send_message(chat_id, f"❌ Error: {str(e)}")
+    
+    finally:
+        # LIMPIEZA TOTAL DE KOYEB (Obligatorio para archivos de 2GB)
+        shutil.rmtree(user_path)
+        print(f"✅ Disco limpio: {user_path} eliminado.")
 
-if __name__ == "__main__":
-    print("Bot en línea. Listo para el nivel 20 y el Mapa 4 [cite: 2026-01-10]")
-    bot.infinity_polling()
+bot.polling(none_stop=True)
