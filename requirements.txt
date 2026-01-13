@@ -1,3 +1,4 @@
 pyTelegramBotAPI
-mega.py
 yt-dlp
+mega.py
+spotdl
