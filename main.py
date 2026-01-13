@@ -1,19 +1,34 @@
-# Reemplaza la función de música en tu main.py por esta:
+import telebot
+import os
+import yt_dlp
+import time
+
+TOKEN = os.getenv('TELEGRAM_TOKEN')
+bot = telebot.TeleBot(TOKEN)
+
+# --- SISTEMA DE JUEGO (MAPA 4) ---
+@bot.message_handler(commands=['cazar'])
+def cazar(message):
+    # Regla: Nivel 20 o Mapa 4 [cite: 2026-01-10]
+    bot.reply_to(message, "🏹 Estás cazando en el Mapa 4. La probabilidad no es fácil ni difícil. [cite: 2026-01-10]")
+    bot.send_message(message.chat.id, "Necesitas 10 orbes épicos para pedir un deseo. [cite: 2026-01-10]")
+
+# --- DESCARGA DE MÚSICA SEGURA ---
 @bot.message_handler(func=lambda m: "youtube.com" in m.text or "youtu.be" in m.text)
-def descargar_musica(message):
-    chat_id = message.chat.id
-    msg = bot.reply_to(message, "🎵 Descargando... esto puede tardar 30 segundos.")
+def descargar(message):
+    cid = message.chat.id
+    m_espera = bot.reply_to(message, "⏳ Descargando... por favor espera.")
     
-    # Nombre de archivo único para evitar errores de permisos
-    archivo_nombre = f"musica_{chat_id}.mp3"
+    # Nombre de archivo único por usuario
+    file_name = f"music_{cid}"
     
     ydl_opts = {
         'format': 'bestaudio/best',
-        'outtmpl': f'audio_{chat_id}.%(ext)s', # Nombre único
+        'outtmpl': file_name, # Guardar sin extensión primero
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
-            'preferredquality': '192',
+            'preferredquality': '128', # Calidad más baja para que Koyeb no sufra
         }],
     }
 
@@ -21,13 +36,17 @@ def descargar_musica(message):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([message.text])
         
-        # Enviamos el archivo
-        with open(f"audio_{chat_id}.mp3", 'rb') as audio:
-            bot.send_audio(chat_id, audio, caption="🎧 ¡Lista! Sigue cazando orbes.")
+        # Enviar el archivo que ahora tiene extensión .mp3
+        with open(f"{file_name}.mp3", 'rb') as f:
+            bot.send_audio(cid, f, caption="🎧 ¡Aquí tienes! Sigue buscando tus 60 orbes legendarios. [cite: 2026-01-10]")
+            
+        # BORRADO INMEDIATO para evitar error en Koyeb
+        os.remove(f"{file_name}.mp3")
+        bot.delete_message(cid, m_espera.message_id)
         
-        # Limpieza
-        os.remove(f"audio_{chat_id}.mp3")
-        bot.delete_message(chat_id, msg.message_id)
-
     except Exception as e:
-        bot.edit_message_text(f"❌ Error: {str(e)[:100]}", chat_id, msg.message_id)
+        bot.edit_message_text(f"❌ Error: Link no válido o pesado.", cid, m_espera.message_id)
+        # Limpieza de seguridad si falló
+        if os.path.exists(f"{file_name}.mp3"): os.remove(f"{file_name}.mp3")
+
+bot.infinity_polling()
