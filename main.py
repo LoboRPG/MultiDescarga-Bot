@@ -1,23 +1,14 @@
-    # --- SI ES MÚSICA (YouTube, Spotify, SoundCloud) ---
-    sitios_musica = ["youtube.com", "youtu.be", "spotify.com", "soundcloud.com"]
-    if any(p in url.lower() for p in sitios_musica):
-        msg = bot.reply_to(message, "🎶 **Procesando música...**")
+import time
+
+# ... (todo tu código anterior) ...
+
+if __name__ == "__main__":
+    print("Esperando 10 segundos para evitar Error 409...")
+    time.sleep(10) # Este retraso permite que Telegram cierre la sesión vieja
+    while True:
         try:
-            # Agregamos opciones para evitar bloqueos
-            YDL_OPTIONS_PRO = {
-                **YDL_OPTIONS,
-                'noplaylist': True, # No descargar listas enteras
-                'nocheckcertificate': True,
-            }
-            with yt_dlp.YoutubeDL(YDL_OPTIONS_PRO) as ydl:
-                info = ydl.extract_info(url, download=True)
-                nombre_mp3 = ydl.prepare_filename(info).rsplit('.', 1)[0] + ".mp3"
-            
-            with open(nombre_mp3, 'rb') as f:
-                bot.send_audio(chat_id, f, caption="🎵 **Música lista para la cacería.**")
-            os.remove(nombre_mp3)
-            bot.delete_message(chat_id, msg.message_id)
+            print("Bot conectado y listo para el Mapa 4")
+            bot.polling(non_stop=True, interval=2, timeout=20)
         except Exception as e:
-            print(f"Error detallado: {e}") # Esto saldrá en tus logs de Koyeb
-            bot.edit_message_text(f"❌ **Error:** El link es privado o no compatible.", chat_id, msg.message_id)
-        return
+            print(f"Error: {e}")
+            time.sleep(10)
