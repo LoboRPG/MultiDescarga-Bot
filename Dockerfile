@@ -1,12 +1,14 @@
 FROM python:3.10-slim
 
-# Instalamos ffmpeg para la música
-RUN apt-get update && apt-get install -y ffmpeg && apt-get clean
+# Instala ffmpeg para la música y herramientas necesarias
+RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY . .
 
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Ejecutamos el bot
+COPY . .
+
+# Comando para arrancar el bot
 CMD ["python", "main.py"]
