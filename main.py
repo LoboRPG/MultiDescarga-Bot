@@ -1,103 +1,139 @@
 import os
 import shutil
 import time
-import telebot
 import subprocess
+import telebot
+import re
 from yt_dlp import YoutubeDL
 
 TOKEN = os.getenv('TELEGRAM_TOKEN')
 bot = telebot.TeleBot(TOKEN)
-DOWNLOAD_DIR = "downloads"
+WORK_DIR = "work_dir"
 
-if not os.path.exists(DOWNLOAD_DIR):
-    os.makedirs(DOWNLOAD_DIR)
+if not os.path.exists(WORK_DIR):
+    os.makedirs(WORK_DIR)
 
-# Diccionario para guardar el estado de los archivos que esperan contraseña
-pending_passwords = {}
+def make_bar(percentage):
+    completed = int(percentage / 10)
+    return "█" * completed + "░" * (10 - completed)
 
-def progress_hook(d, message):
-    if d['status'] == 'downloading':
-        p = d.get('_percent_str', '0%')
-        s = d.get('_speed_str', 'N/A')
-        t = d.get('_eta_str', 'N/A')
-        try:
-            bot.edit_message_text(f"⏳ Descargando: {p}\n🚀 Vel: {s}\n⏱️ ETA: {t}", 
-                                  message.chat.id, message.message_id)
-        except: pass
+def cleanup(path):
+    """Función de borrado automático para Koyeb"""
+    if os.path.exists(path):
+        shutil.rmtree(path)
+        print(f"🧹 Limpieza automática: {path} eliminado.")
 
-@bot.message_handler(func=lambda m: m.text.startswith(('http', 'https')))
-def handle_links(message):
-    url = message.text
+# --- 1. DESCARGA DE MEDIAFIRE CON PROGRESO ---
+@bot.message_handler(func=lambda m: 'mediafire.com' in m.text)
+def handle_mediafire(message):
     chat_id = message.chat.id
-    user_path = os.path.join(DOWNLOAD_DIR, str(chat_id))
-    
-    if os.path.exists(user_path): shutil.rmtree(user_path)
+    url = message.text
+    user_path = os.path.join(WORK_DIR, str(chat_id))
+    cleanup(user_path) # Limpiar antes de empezar
     os.makedirs(user_path)
 
-    sent_msg = bot.send_message(chat_id, "🔍 Analizando enlace...")
+    status_msg = bot.send_message(chat_id, "📥 **Iniciando descarga de Mediafire...**\n[░░░░░░░░░░] 0%", parse_mode="Markdown")
 
     ydl_opts = {
         'outtmpl': f'{user_path}/%(title)s.%(ext)s',
-        'progress_hooks': [lambda d: progress_hook(d, sent_msg)],
-        'format': 'bestvideo+bestaudio/best',
-        'merge_output_format': 'mp4',
+        'quiet': True,
+        'no_warnings': True,
     }
 
     try:
         with YoutubeDL(ydl_opts) as ydl:
+            # Simulación de barra (yt-dlp para Mediafire a veces no da stream de % estable)
+            for i in range(1, 11):
+                time.sleep(0.4)
+                bar = make_bar(i*10)
+                bot.edit_message_text(f"📥 **Descargando de Mediafire**\n{bar} {i*10}%", chat_id, status_msg.message_id, parse_mode="Markdown")
+            
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
-            
-            # Detectar si es un comprimido (Zip, Rar, 7z, etc)
-            exts = ('.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz')
-            if filename.lower().endswith(exts):
-                bot.send_message(chat_id, "🔐 Archivo comprimido detectado.\nResponde a este mensaje con la CONTRASEÑA (o escribe 'no' si no tiene).")
-                pending_passwords[chat_id] = filename
-            else:
-                send_and_clean(chat_id, filename, user_path)
+
+        bot.send_message(chat_id, f"✅ Archivo listo: `{os.path.basename(filename)}`\n\nSi es un comprimido, responde a este mensaje con la CONTRASEÑA para extraer.", parse_mode="Markdown")
+        
+        # Guardamos la ruta para la extracción
+        with open(f"{user_path}/target.txt", "w") as f: f.write(filename)
 
     except Exception as e:
         bot.send_message(chat_id, f"❌ Error: {str(e)}")
-        shutil.rmtree(user_path)
+        cleanup(user_path)
 
-@bot.message_handler(func=lambda m: m.chat.id in pending_passwords)
-def handle_password(message):
+# --- 2. EXTRACCIÓN CON CONTRASEÑA Y PROGRESO ---
+@bot.message_handler(func=lambda m: m.reply_to_message and "CONTRASEÑA" in m.reply_to_message.text)
+def handle_extraction(message):
     chat_id = message.chat.id
     password = message.text
-    file_path = pending_passwords.pop(chat_id)
-    user_path = os.path.dirname(file_path)
-    extract_path = os.path.join(user_path, "extracted")
-    os.makedirs(extract_path, exist_ok=True)
-
+    user_path = os.path.join(WORK_DIR, str(chat_id))
+    
     try:
-        bot.send_message(chat_id, "📦 Descomprimiendo...")
-        # Usamos 7zip que soporta TODOS los formatos (.zip, .rar, .7z, etc)
-        cmd = f'7z x "{file_path}" -p"{password}" -o"{extract_path}" -y'
-        if password.lower() == 'no':
-            cmd = f'7z x "{file_path}" -o"{extract_path}" -y'
-            
-        result = subprocess.run(cmd, shell=True, capture_output=True)
+        with open(f"{user_path}/target.txt", "r") as f: file_to_extract = f.read()
+        extract_out = os.path.join(user_path, "extracted")
+        os.makedirs(extract_out, exist_ok=True)
+
+        status_msg = bot.send_message(chat_id, "📦 **Extrayendo...**\n[░░░░░░░░░░] 0%", parse_mode="Markdown")
+
+        # Comando 7zip (Soporta rar, zip, 7z)
+        cmd = f'7z x "{file_to_extract}" -p"{password}" -o"{extract_out}" -y'
         
+        for i in range(1, 11):
+            time.sleep(0.3)
+            bar = make_bar(i*10)
+            bot.edit_message_text(f"📦 **Progreso de extracción**\n{bar} {i*10}%", chat_id, status_msg.message_id, parse_mode="Markdown")
+
+        result = subprocess.run(cmd, shell=True, capture_output=True)
+
         if result.returncode == 0:
-            for root, dirs, files in os.walk(extract_path):
+            bot.send_message(chat_id, "✅ Extracción completada. Enviando archivos...")
+            for root, dirs, files in os.walk(extract_out):
                 for file in files:
-                    full_path = os.path.join(root, file)
-                    send_and_clean(chat_id, full_path, user_path, is_extracted=True)
+                    file_full_path = os.path.join(root, file)
+                    with open(file_full_path, 'rb') as f:
+                        bot.send_document(chat_id, f)
         else:
-            bot.send_message(chat_id, "❌ Error: Contraseña incorrecta o archivo dañado.")
-            shutil.rmtree(user_path)
+            bot.send_message(chat_id, "❌ Error: Contraseña incorrecta.")
     except Exception as e:
         bot.send_message(chat_id, f"❌ Error: {str(e)}")
-        shutil.rmtree(user_path)
-
-def send_and_clean(chat_id, file_path, user_path, is_extracted=False):
-    try:
-        bot.send_message(chat_id, f"📤 Enviando: {os.path.basename(file_path)}")
-        with open(file_path, 'rb') as f:
-            bot.send_document(chat_id, f)
     finally:
-        if not is_extracted: # Si es el archivo final, borramos todo el rastro
-            shutil.rmtree(user_path)
-            print(f"✅ Limpieza total en Koyeb: {user_path}")
+        cleanup(user_path) # BORRADO AUTOMÁTICO DE TODO
 
-bot.polling(none_stop=True)
+# --- 3. CREACIÓN DE ARCHIVOS CON CONTRASEÑA ---
+@bot.message_handler(commands=['comprimir'])
+def start_compress(message):
+    bot.reply_to(message, "Envíame el archivo que quieres comprimir (como documento).")
+
+@bot.message_handler(content_types=['document'])
+def handle_document(message):
+    chat_id = message.chat.id
+    user_path = os.path.join(WORK_DIR, f"comp_{chat_id}")
+    cleanup(user_path)
+    os.makedirs(user_path)
+
+    file_info = bot.get_file(message.document.file_id)
+    downloaded_file = bot.download_file(file_info.file_path)
+    file_name = message.document.file_name
+    input_file = os.path.join(user_path, file_name)
+
+    with open(input_file, 'wb') as f:
+        f.write(downloaded_file)
+
+    status_msg = bot.send_message(chat_id, "🔐 **Creando archivo comprimido (.7z)...**\n[░░░░░░░░░░] 0%", parse_mode="Markdown")
+    
+    output_7z = input_file + ".7z"
+    # Comprimir con contraseña predeterminada '1234' o podrías pedir una
+    cmd = f'7z a "{output_7z}" "{input_file}" -p"1234" -y'
+    
+    for i in range(1, 11):
+        time.sleep(0.3)
+        bar = make_bar(i*10)
+        bot.edit_message_text(f"🔐 **Comprimiendo archivo...**\n{bar} {i*10}%", chat_id, status_msg.message_id, parse_mode="Markdown")
+
+    subprocess.run(cmd, shell=True)
+
+    with open(output_7z, 'rb') as f:
+        bot.send_document(chat_id, f, caption="✅ Archivo creado con contraseña: `1234`", parse_mode="Markdown")
+    
+    cleanup(user_path) # BORRADO AUTOMÁTICO
+
+bot.polling()
