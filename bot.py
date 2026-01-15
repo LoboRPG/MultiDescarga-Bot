@@ -1,64 +1,60 @@
 import telebot
 import yt_dlp
 import os
-import shutil
+import subprocess
 
-# NUEVO TOKEN (Cambiado para evitar conflictos)
-TOKEN = '8134514604:AAHatZbJL4PUiii9fZZKuTySdFGH-E-6vcU'
+# TU NUEVO TOKEN ACTUALIZADO
+TOKEN = '7774776104:AAEqfG_26rW6YlJp-K8u5X23qNf-j-6vcU'
 bot = telebot.TeleBot(TOKEN)
 
-# Carpeta de trabajo (Se limpia automáticamente)
-TEMP_DIR = "downloads"
-
-if not os.path.exists(TEMP_DIR):
-    os.makedirs(TEMP_DIR)
+# Carpeta temporal de descargas
+DOWNLOAD_DIR = 'downloads'
+if not os.path.exists(DOWNLOAD_DIR):
+    os.makedirs(DOWNLOAD_DIR)
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    bot.reply_to(message, "🎵 ¡Bot de Música Lyrics Activo!\nEnvíame el nombre de una canción y te la enviaré con portada.")
+    bot.reply_to(message, "¡Hola! Envíame el nombre de una canción y te la enviaré en versión Lyrics con su portada.")
 
 @bot.message_handler(func=lambda message: True)
 def download_music(message):
     query = message.text
-    chat_id = message.chat.id
+    # Forzamos la búsqueda de la versión Lyrics
+    search_query = f"ytsearch1:{query} lyrics"
     
-    # Agregamos "lyrics" para audio limpio de ruidos de video
-    search_query = f"{query} lyrics"
-    msg = bot.send_message(chat_id, f"🔍 Procesando versión Lyrics: {query}...")
-    
+    msg = bot.reply_to(message, f"🔍 Buscando '{query}' en versión Lyrics...")
+
     ydl_opts = {
         'format': 'bestaudio/best',
-        'outtmpl': f'{TEMP_DIR}/%(title)s.%(ext)s',
-        'writethumbnail': True, # Descarga la imagen
-        'postprocessors': [
-            {
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            },
-            {'key': 'EmbedThumbnail'}, # Pega la foto al audio
-            {'key': 'FFmpegMetadata'},
-        ],
-        'quiet': True,
-        'noplaylist': True,
+        'outtmpl': f'{DOWNLOAD_DIR}/%(title)s.%(ext)s',
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
+        }, {
+            'key': 'EmbedThumbnail',
+        }],
+        'writethumbnail': True,
+        'quiet': True
     }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # Busca y descarga usando yt-dlp y ffmpeg
-            info = ydl.extract_info(f"ytsearch1:{search_query}", download=True)
-            if 'entries' in info:
-                info = info['entries'][0]
-            
-            # Ajuste de nombre de archivo para MP3
-            filename = ydl.prepare_filename(info).rsplit('.', 1)[0] + ".mp3"
-            
-            if os.path.exists(filename):
-                with open(filename, 'rb') as audio:
-                    bot.send_audio(chat_id, audio, title=info.get('title'), performer=info.get('uploader'))
-                bot.delete_message(chat_id, msg.message_id)
-            else:
-                bot.edit_message_text("❌ Error: No se pudo generar el archivo MP3.", chat_id, msg.message_id)
+            info = ydl.extract_info(search_query, download=True)
+            video_title = info['entries'][0]['title']
+            file_path = f"{DOWNLOAD_DIR}/{video_title}.mp3"
+
+        # Enviamos el archivo con la portada
+        with open(file_path, 'rb') as audio:
+            bot.send_audio(message.chat.id, audio, title=video_title)
+        
+        # LIMPIEZA DE MEMORIA: Borramos el archivo para no llenar el disco de Koyeb
+        os.remove(file_path)
+        bot.delete_message(message.chat.id, msg.message_id)
 
     except Exception as e:
-        bot.edit_message_text
+        bot.edit_message_text(f"❌ Error: {str(e)}", message.chat.id, msg.message_id)
+
+# ESTA LÍNEA ES VITAL PARA QUE KOYEB NO CIERRE EL BOT (EVITA EL ERROR 0)
+print("Bot encendido correctamente...")
+bot.polling(none_stop=True)
