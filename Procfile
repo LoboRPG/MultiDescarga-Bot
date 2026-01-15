@@ -1,1 +1,2 @@
-worker: python bot.py
+pyTelegramBotAPI
+yt-dlp
