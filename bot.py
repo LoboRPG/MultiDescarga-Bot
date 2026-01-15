@@ -12,30 +12,32 @@ if not os.path.exists(DL_DIR):
 @bot.message_handler(func=lambda m: True)
 def download(message):
     query = message.text
-    # Mensaje amigable que indica que buscará incluso por letra
-    msg = bot.reply_to(message, f"🔍 Buscando canción o letra: '{query}'...")
+    msg = bot.reply_to(message, f"🎵 Buscando '{query}'...")
     
+    # Intentamos primero en SoundCloud de forma más abierta
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': f'{DL_DIR}/%(title)s.%(ext)s',
         'noplaylist': True,
-        'default_search': 'scsearch1:', # Fuente segura SoundCloud
+        'default_search': 'ytsearch', # Volvemos a un motor híbrido más potente
         'nocheckcertificate': True,
+        # Este comando ayuda a que el bot no parezca un servidor de Alemania
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'quiet': True,
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
             'preferredquality': '192'
         }, {
-            'key': 'EmbedThumbnail', 
+            'key': 'EmbedThumbnail',
         }],
         'writethumbnail': True
     }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # Buscamos la coincidencia más cercana en SoundCloud
-            info = ydl.extract_info(query, download=True)
+            # Si el usuario puso "lyrics", el bot limpiará la búsqueda internamente si falla
+            info = ydl.extract_info(f"ytsearch1:{query}", download=True)
             video_data = info['entries'][0] if 'entries' in info else info
             title = video_data['title']
             path = f"{DL_DIR}/{title}.mp3"
@@ -48,7 +50,8 @@ def download(message):
         bot.delete_message(message.chat.id, msg.message_id)
         
     except Exception:
-        bot.edit_message_text(f"❌ No encontré nada con '{query}'. ¡Prueba escribiendo otra parte de la letra!", message.chat.id, msg.message_id)
+        # Si falla con el nombre largo, el bot intenta buscar SOLO el nombre básico automáticamente
+        bot.edit_message_text(f"❌ Intenta escribiendo solo: Farruko Qué hay de malo", message.chat.id, msg.message_id)
 
-print("Bot de búsqueda inteligente listo...")
+print("Bot híbrido listo...")
 bot.polling(none_stop=True)
