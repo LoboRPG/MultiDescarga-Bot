@@ -1,10 +1,9 @@
 import telebot
 import yt_dlp
 import os
-import subprocess
 
-# TU NUEVO TOKEN ACTUALIZADO
-TOKEN = '7774776104:AAEqfG_26rW6YlJp-K8u5X23qNf-j-6vcU'
+# NUEVO TOKEN ACTUALIZADO
+TOKEN = '8134514604:AAF0iCAUvA3qg8TpBZOeC-xKfZyeZRrDFSY'
 bot = telebot.TeleBot(TOKEN)
 
 # Carpeta temporal de descargas
@@ -19,7 +18,6 @@ def send_welcome(message):
 @bot.message_handler(func=lambda message: True)
 def download_music(message):
     query = message.text
-    # Forzamos la búsqueda de la versión Lyrics
     search_query = f"ytsearch1:{query} lyrics"
     
     msg = bot.reply_to(message, f"🔍 Buscando '{query}' en versión Lyrics...")
@@ -44,17 +42,17 @@ def download_music(message):
             video_title = info['entries'][0]['title']
             file_path = f"{DOWNLOAD_DIR}/{video_title}.mp3"
 
-        # Enviamos el archivo con la portada
         with open(file_path, 'rb') as audio:
             bot.send_audio(message.chat.id, audio, title=video_title)
         
-        # LIMPIEZA DE MEMORIA: Borramos el archivo para no llenar el disco de Koyeb
-        os.remove(file_path)
+        # LIMPIEZA DE MEMORIA
+        if os.path.exists(file_path):
+            os.remove(file_path)
         bot.delete_message(message.chat.id, msg.message_id)
 
     except Exception as e:
         bot.edit_message_text(f"❌ Error: {str(e)}", message.chat.id, msg.message_id)
 
-# ESTA LÍNEA ES VITAL PARA QUE KOYEB NO CIERRE EL BOT (EVITA EL ERROR 0)
+# ESTO MANTIENE EL BOT ENCENDIDO EN KOYEB
 print("Bot encendido correctamente...")
 bot.polling(none_stop=True)
