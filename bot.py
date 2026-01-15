@@ -13,27 +13,33 @@ if not os.path.exists(DL_DIR):
 @bot.message_handler(func=lambda m: True)
 def download(message):
     query = message.text
-    msg = bot.reply_to(message, f"🚀 Preparando audio: {query}...")
+    msg = bot.reply_to(message, f"🎵 Buscando '{query}' en SoundCloud...")
     
+    # Configuración exclusiva para SoundCloud
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': f'{DL_DIR}/%(title)s.%(ext)s',
         'noplaylist': True,
-        # Esto ayuda a saltar el bloqueo de "Sign in" en servidores
-        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
+        # Forzamos la búsqueda solo en SoundCloud para evitar bloqueos de YouTube
+        'default_search': 'scsearch1:',
         'nocheckcertificate': True,
         'quiet': True,
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
             'preferredquality': '192'
-        }]
+        }, {
+            'key': 'EmbedThumbnail', # Mantenemos las portadas
+        }],
+        'writethumbnail': True
     }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # Buscamos directamente el video
-            info = ydl.extract_info(f"ytsearch1:{query}", download=True)
+            # Buscamos y descargamos
+            info = ydl.extract_info(query, download=True)
+            
+            # Si es una lista de búsqueda, tomamos el primer resultado
             if 'entries' in info:
                 video_data = info['entries'][0]
             else:
@@ -42,16 +48,17 @@ def download(message):
             title = video_data['title']
             path = f"{DL_DIR}/{title}.mp3"
 
+        # Enviamos el archivo al usuario
         with open(path, 'rb') as f:
             bot.send_audio(message.chat.id, f, title=title)
         
-        # Limpieza inmediata para no saturar los 256MB de RAM
-        os.remove(path)
+        # Limpieza de memoria (importante para tu instancia Nano)
+        if os.path.exists(path):
+            os.remove(path)
         bot.delete_message(message.chat.id, msg.message_id)
         
     except Exception as e:
-        # Si falla YouTube, el bot te dará un consejo útil
-        bot.edit_message_text(f"⚠️ YouTube bloqueó la descarga. Intenta con otro nombre corto.", message.chat.id, msg.message_id)
+        bot.edit_message_text(f"❌ No encontré '{query}' en SoundCloud. Prueba con el nombre del artista y la canción.", message.chat.id, msg.message_id)
 
-print("Bot optimizado listo...")
+print("Bot exclusivo de SoundCloud listo...")
 bot.polling(none_stop=True)
