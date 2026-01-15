@@ -1,48 +1,41 @@
 import telebot
 import yt_dlp
 import os
+import time
 
 TOKEN = '8134514604:AAF0iCAUvA3qg8TpBZOeC-xKfZyeZRrDFSY'
 bot = telebot.TeleBot(TOKEN)
 
-# Carpeta temporal
+# LIMPIEZA DE WEBHOOKS PARA EVITAR ERROR 409
+bot.remove_webhook()
+time.sleep(1)
+
 if not os.path.exists('musica'):
     os.makedirs('musica')
 
-@bot.message_handler(commands=['start'])
-def welcome(message):
-    bot.reply_to(message, "✅ ¡Bot de Música y The Wolf activo! Envíame el nombre de la canción.")
-
 @bot.message_handler(func=lambda m: True)
-def descargar_y_juego(message):
+def descargar(message):
     query = message.text
     
-    # Si hablas del juego (The Wolf)
-    if "orbe" in query.lower() or "wolf" in query.lower():
-        bot.reply_to(message, "🐺 **Guía The Wolf:** Recuerda que al nivel 20 en el cuarto mapa aparecen los 10 orbes épicos cazar animales. ¡Suerte!")
+    # Respuesta rápida para el juego The Wolf
+    if any(word in query.lower() for word in ["orbe", "lobo", "wolf", "nivel 20"]):
+        bot.reply_to(message, "🐺 **Guía The Wolf:** Al nivel 20 en el mapa 4 busca los 10 orbes épicos cazando. ¡Suerte!")
         return
 
-    # Si pides música
-    msg = bot.reply_to(message, f"⏳ Descargando '{query}'... (esto puede tardar 1 minuto)")
+    msg = bot.reply_to(message, f"🔍 Buscando '{query}'...")
     
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': 'musica/%(title)s.%(ext)s',
-        # TRUCO: Usamos un servidor intermedio para evitar el bloqueo de Alemania
-        'source_address': '0.0.0.0', 
+        'default_search': 'scsearch1:', # USAMOS SOUNDCLOUD PARA EVITAR EL ERROR DE 'SIGN IN'
         'nocheckcertificate': True,
-        'quiet': True,
         'postprocessors': [{'key': 'FFmpegExtractAudio','preferredcodec': 'mp3','preferredquality': '192'}],
     }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(f"ytsearch1:{query}", download=True)
-            if 'entries' in info:
-                data = info['entries'][0]
-            else:
-                data = info
-            
+            info = ydl.extract_info(query, download=True)
+            data = info['entries'][0] if 'entries' in info else info
             filename = ydl.prepare_filename(data).replace('.webm', '.mp3').replace('.m4a', '.mp3')
             
         with open(filename, 'rb') as f:
@@ -50,7 +43,7 @@ def descargar_y_juego(message):
         
         os.remove(filename)
         bot.delete_message(message.chat.id, msg.message_id)
-    except Exception:
-        bot.edit_message_text("❌ Error de conexión. Intenta con un nombre más corto o de otro artista.", message.chat.id, msg.message_id)
+    except Exception as e:
+        bot.edit_message_text(f"❌ Error: Las plataformas están saturadas. Intenta con otro nombre.", message.chat.id, msg.message_id)
 
 bot.polling(none_stop=True)
